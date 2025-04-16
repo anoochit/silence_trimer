@@ -6,7 +6,7 @@ name: Build and Release Executables
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
 
 # Set permissions for the GITHUB_TOKEN to allow creating releases and uploading assets
 permissions:
@@ -25,8 +25,8 @@ jobs:
           - os: ubuntu-latest
             asset_os_name: linux_x64
             archive_cmd: tar czf # Command to create archive
-            archive_ext: tar.gz  # Archive file extension
-            exe_ext: ""          # Executable file extension
+            archive_ext: tar.gz # Archive file extension
+            exe_ext: "" # Executable file extension
           - os: macos-latest
             asset_os_name: macos_x64
             archive_cmd: tar czf
@@ -37,7 +37,7 @@ jobs:
             # Use PowerShell command for zipping on Windows
             archive_cmd: Compress-Archive -CompressionLevel Optimal -Force -Path
             archive_ext: zip
-            exe_ext: ".exe"      # Windows executables have .exe extension
+            exe_ext: ".exe" # Windows executables have .exe extension
 
     steps:
       - name: Checkout code
@@ -46,13 +46,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10' # Specify a Python version
+          python-version: "3.10" # Specify a Python version
 
       - name: Install PyInstaller
         run: pip install pyinstaller
 
       # --- FFmpeg Installation ---
-      # Different commands are needed for each OS
+      # Different commands/actions are needed for each OS
 
       - name: Install FFmpeg (Linux)
         if: matrix.os == 'ubuntu-latest'
@@ -64,12 +64,17 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: brew install ffmpeg
 
-      # FFmpeg might be pre-installed on windows-latest, but explicit install ensures it
+      # Use a dedicated action to install FFmpeg via winget on Windows
       - name: Install FFmpeg (Windows)
         if: matrix.os == 'windows-latest'
-        # Using winget to install ffmpeg from official source
-        run: winget install --id Gyan.FFmpeg.Full --source winget --accept-package-agreements --accept-source-agreements
+        uses: c-hive/gha-winget-pkg@v1 # Use the winget action
+        with:
+          pkg: Gyan.FFmpeg.Full # Specify the package ID
+          source: winget # Specify the source
+          acceptPackageAgreements: true # Automatically accept agreements
+          acceptSourceAgreements: true # Automatically accept source agreements
 
+      # The winget action doesn't automatically add to PATH, so this step is still needed
       - name: Add FFmpeg to PATH (Windows)
         if: matrix.os == 'windows-latest'
         # Find the latest installed ffmpeg version path and add its bin dir to PATH
@@ -135,7 +140,7 @@ jobs:
   create-release:
     name: Create GitHub Release
     needs: build-executables # Depends on the build jobs completing
-    runs-on: ubuntu-latest   # Can run on any OS, Ubuntu is common for release tasks
+    runs-on: ubuntu-latest # Can run on any OS, Ubuntu is common for release tasks
 
     steps:
       - name: Download all build artifacts
