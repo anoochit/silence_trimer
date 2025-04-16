@@ -88,8 +88,8 @@ jobs:
       - name: Build silent_trimmer with PyInstaller
         run: pyinstaller --onefile --name silent_trimmer${{ matrix.exe_ext }} silent_trimmer.py
 
-      - name: Build silence_marker with PyInstaller
-        run: pyinstaller --onefile --name silence_marker${{ matrix.exe_ext }} silence_marker.py
+      - name: Build silent_marker with PyInstaller
+        run: pyinstaller --onefile --name silent_marker${{ matrix.exe_ext }} silent_marker.py
 
       # --- Package Executables ---
 
@@ -100,14 +100,14 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           cp dist/silent_trimmer${{ matrix.exe_ext }} release_assets/
-          cp dist/silence_marker${{ matrix.exe_ext }} release_assets/
+          cp dist/silent_marker${{ matrix.exe_ext }} release_assets/
 
       - name: Copy Executables (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           Copy-Item dist/silent_trimmer${{ matrix.exe_ext }} release_assets/
-          Copy-Item dist/silence_marker${{ matrix.exe_ext }} release_assets/
+          Copy-Item dist/silent_marker${{ matrix.exe_ext }} release_assets/
 
       - name: Create Archive (Linux/macOS)
         if: matrix.os != 'windows-latest'
