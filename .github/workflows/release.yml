@@ -1,0 +1,162 @@
+# .github/workflows/release.yml
+
+name: Build and Release Executables
+
+# Trigger the workflow on pushes to tags matching v*.*.* (e.g., v1.0.0)
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+# Set permissions for the GITHUB_TOKEN to allow creating releases and uploading assets
+permissions:
+  contents: write
+
+jobs:
+  build-executables:
+    name: Build on ${{ matrix.os }}
+    # Run jobs on different operating systems
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          # Define specific settings for each OS
+          - os: ubuntu-latest
+            asset_os_name: linux_x64
+            archive_cmd: tar czf # Command to create archive
+            archive_ext: tar.gz  # Archive file extension
+            exe_ext: ""          # Executable file extension
+          - os: macos-latest
+            asset_os_name: macos_x64
+            archive_cmd: tar czf
+            archive_ext: tar.gz
+            exe_ext: ""
+          - os: windows-latest
+            asset_os_name: windows_x64
+            # Use PowerShell command for zipping on Windows
+            archive_cmd: Compress-Archive -CompressionLevel Optimal -Force -Path
+            archive_ext: zip
+            exe_ext: ".exe"      # Windows executables have .exe extension
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10' # Specify a Python version
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      # --- FFmpeg Installation ---
+      # Different commands are needed for each OS
+
+      - name: Install FFmpeg (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg
+
+      - name: Install FFmpeg (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install ffmpeg
+
+      # FFmpeg might be pre-installed on windows-latest, but explicit install ensures it
+      - name: Install FFmpeg (Windows)
+        if: matrix.os == 'windows-latest'
+        # Using winget to install ffmpeg from official source
+        run: winget install --id Gyan.FFmpeg.Full --source winget --accept-package-agreements --accept-source-agreements
+
+      - name: Add FFmpeg to PATH (Windows)
+        if: matrix.os == 'windows-latest'
+        # Find the latest installed ffmpeg version path and add its bin dir to PATH
+        run: |
+          $ffmpegPath = (Get-ChildItem "C:\Program Files\ffmpeg\*" | Where-Object {$_.PSIsContainer} | Sort-Object Name -Descending | Select-Object -First 1).FullName
+          echo "$ffmpegPath\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Verify FFmpeg installation
+        run: |
+          ffmpeg -version
+          ffprobe -version
+
+      # --- Build Executables ---
+
+      - name: Build silent_trimmer with PyInstaller
+        run: pyinstaller --onefile --name silent_trimmer${{ matrix.exe_ext }} silent_trimmer.py
+
+      - name: Build silence_marker with PyInstaller
+        run: pyinstaller --onefile --name silence_marker${{ matrix.exe_ext }} silence_marker.py
+
+      # --- Package Executables ---
+
+      - name: Prepare Artifacts Directory
+        run: mkdir release_assets
+
+      - name: Copy Executables (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cp dist/silent_trimmer${{ matrix.exe_ext }} release_assets/
+          cp dist/silence_marker${{ matrix.exe_ext }} release_assets/
+
+      - name: Copy Executables (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Copy-Item dist/silent_trimmer${{ matrix.exe_ext }} release_assets/
+          Copy-Item dist/silence_marker${{ matrix.exe_ext }} release_assets/
+
+      - name: Create Archive (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd release_assets
+          ${{ matrix.archive_cmd }} ../silent_tools_${{ matrix.asset_os_name }}.${{ matrix.archive_ext }} *
+          cd ..
+
+      - name: Create Archive (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: ${{ matrix.archive_cmd }} release_assets/* silent_tools_${{ matrix.asset_os_name }}.${{ matrix.archive_ext }}
+
+      # --- Upload Artifact ---
+      # Upload the archive for the current OS to be used by the release job
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: silent_tools_${{ matrix.asset_os_name }} # Unique name for each OS artifact
+          path: silent_tools_${{ matrix.asset_os_name }}.${{ matrix.archive_ext }} # Path to the archive file
+
+  # --- Create Release ---
+  # This job runs only after all build jobs are successful
+  create-release:
+    name: Create GitHub Release
+    needs: build-executables # Depends on the build jobs completing
+    runs-on: ubuntu-latest   # Can run on any OS, Ubuntu is common for release tasks
+
+    steps:
+      - name: Download all build artifacts
+        # Download artifacts uploaded by the build jobs
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts # Download all artifacts into the 'artifacts' directory
+
+      - name: List downloaded artifacts # Helpful for debugging
+        run: ls -R artifacts
+
+      - name: Create Release and Upload Assets
+        # Use a popular action to create the release and upload files
+        uses: softprops/action-gh-release@v1
+        with:
+          # The action automatically uses the tag name that triggered the workflow
+          # 'files' lists the artifacts to upload. Paths reflect the download structure.
+          files: |
+            artifacts/silent_tools_linux_x64/silent_tools_linux_x64.tar.gz
+            artifacts/silent_tools_macos_x64/silent_tools_macos_x64.tar.gz
+            artifacts/silent_tools_windows_x64/silent_tools_windows_x64.zip
+        env:
+          # GITHUB_TOKEN is automatically provided by GitHub Actions
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

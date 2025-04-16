@@ -1,0 +1,15 @@
+# Core dependencies for silent video trimmer script
+ffmpeg-python>=0.2.0
+
+# Optional packages for enhanced functionality
+pathlib2>=2.3.5; python_version < '3.4'
+subprocess32>=3.5.4; python_version < '3.0'
+
+# Standard library modules used (for reference only, no installation needed):
+# - subprocess
+# - re
+# - os
+# - argparse
+# - pathlib (Python 3.4+)
+# - json
+# - shutil
