@@ -64,24 +64,33 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: brew install ffmpeg
 
-      # Use a dedicated action to install FFmpeg via winget on Windows
       - name: Install FFmpeg (Windows)
         if: matrix.os == 'windows-latest'
-        uses: c-hive/gha-winget-pkg@v1 # Use the winget action
-        with:
-          pkg: Gyan.FFmpeg.Full # Specify the package ID
-          source: winget # Specify the source
-          acceptPackageAgreements: true # Automatically accept agreements
-          acceptSourceAgreements: true # Automatically accept source agreements
-
-      # The winget action doesn't automatically add to PATH, so this step is still needed
-      - name: Add FFmpeg to PATH (Windows)
-        if: matrix.os == 'windows-latest'
-        # Find the latest installed ffmpeg version path and add its bin dir to PATH
+        shell: powershell
         run: |
-          $ffmpegPath = (Get-ChildItem "C:\Program Files\ffmpeg\*" | Where-Object {$_.PSIsContainer} | Sort-Object Name -Descending | Select-Object -First 1).FullName
-          echo "$ffmpegPath\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-        shell: pwsh
+          # Create a temporary directory for downloading
+          $tempDir = Join-Path $env:TEMP "ffmpeg-download"
+          New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+
+          # Download FFmpeg for Windows
+          $ffmpegUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+          $zipPath = Join-Path $tempDir "ffmpeg.zip"
+
+          Write-Host "Downloading FFmpeg from $ffmpegUrl"
+          Invoke-WebRequest -Uri $ffmpegUrl -OutFile $zipPath
+
+          # Extract the archive
+          Write-Host "Extracting FFmpeg"
+          Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
+
+          # Find the bin directory with ffmpeg.exe
+          $ffmpegBinDir = Get-ChildItem -Path $tempDir -Recurse -Filter "bin" | 
+                          Where-Object { Test-Path (Join-Path $_.FullName "ffmpeg.exe") } | 
+                          Select-Object -First 1 -ExpandProperty FullName
+
+          # Add to PATH for this workflow run
+          Write-Host "Adding FFmpeg to PATH: $ffmpegBinDir"
+          echo "$ffmpegBinDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Verify FFmpeg installation
         run: |
