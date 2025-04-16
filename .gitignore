@@ -2,3 +2,5 @@ tmp/
 *.json
 *.edl
 *.mp4
+build/
+dist/
